@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>2 - AR Experience</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            color: white;
+            text-align: center;
+            transition: opacity 0.5s ease;
+        }
+        
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-content {
+            max-width: 320px;
+            padding: 0 20px;
+        }
+        
+        .loading-content h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+        
+        .loading-content p {
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 32px;
+            opacity: 0.9;
+        }
+        
+        .start-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            outline: none;
+        }
+        
+        .start-button:hover, .start-button:focus {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        .start-button:active {
+            transform: translateY(0);
+        }
+        
+        /* Progress Indicator */
+        .progress-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            margin: 24px auto 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: white;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        /* Camera Instructions */
+        .camera-instructions {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            transform: translateY(-100px);
+            opacity: 0;
+            transition: all 0.5s ease;
+        }
+        
+        .camera-instructions.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .camera-instructions h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .camera-instructions p {
+            font-size: 14px;
+            line-height: 1.4;
+            opacity: 0.9;
+        }
+        
+        /* Status Indicator */
+        .status-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .status-indicator.show {
+            opacity: 1;
+        }
+        
+        /* Scanning Animation */
+        .scanning-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 500;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .scanning-overlay.active {
+            opacity: 1;
+        }
+        
+        .scanning-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 200px;
+            height: 200px;
+            border: 2px solid #00ff88;
+            border-radius: 12px;
+            transform: translate(-50%, -50%);
+            animation: scan-pulse 2s infinite;
+        }
+        
+        @keyframes scan-pulse {
+            0%, 100% { 
+                opacity: 0.3;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% { 
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.05);
+            }
+        }
+        
+        /* Close Button */
+        .close-instructions {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            opacity: 0.7;
+        }
+        
+        .close-instructions:hover {
+            opacity: 1;
+        }
+        
+        /* Responsive */
+        @media (max-width: 480px) {
+            .loading-content h1 {
+                font-size: 20px;
+            }
+            
+            .loading-content p {
+                font-size: 14px;
+            }
+            
+            .camera-instructions {
+                left: 16px;
+                right: 16px;
+                top: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <h1>🎯 2</h1>
+            <p>Experiencia de Realidad Aumentada<br>Toca "Comenzar" para iniciar</p>
+            <p id="deviceInfo" style="font-size: 12px; opacity: 0.7; margin: 8px 0;"></p>
+            <button class="start-button" onclick="startARExperience()">
+                📱 Comenzar
+            </button>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Camera Instructions -->
+    <div class="camera-instructions" id="cameraInstructions">
+        <button class="close-instructions" onclick="hideInstructions()">×</button>
+        <h3>📹 Busca el marcador</h3>
+        <p>Apunta la cámara hacia el marcador objetivo y mantén el dispositivo estable para la mejor experiencia.</p>
+    </div>
+    
+    <!-- Status Indicator -->
+    <div class="status-indicator" id="statusIndicator">
+        Buscando marcador...
+    </div>
+    
+    <!-- Scanning Overlay -->
+    <div class="scanning-overlay" id="scanningOverlay">
+        <div class="scanning-line"></div>
+    </div>
+
+    <a-scene 
+        mindar-image="imageTargetSrc: ./target.mind; maxTrack: 1; uiLoading: no; uiScanning: no;"
+        color-space="sRGB" 
+        renderer="colorManagement: true, physicallyCorrectLights; antialias: true; alpha: true"
+        vr-mode-ui="enabled: false" 
+        device-orientation-permission-ui="enabled: false"
+        id="arScene">
+        
+        <a-assets>
+            <video id="content-video" src="./assets/content_1757896803215_optimized.mp4" preload="auto" loop crossorigin="anonymous" playsinline webkit-playsinline></video>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity id="ar-content" mindar-image-target="targetIndex: 0">
+            <a-video 
+                id="ar-video"
+                src="#content-video" 
+                width="2" 
+                height="1.5" 
+                position="0 0 0"
+                scale="1 1 1"
+                material="transparent: true; alphaTest: 0.1"
+                animation__appear="property: scale; from: 0 0 0; to: 1 1 1; dur: 1000; easing: easeOutBack; startEvents: targetFound"
+                class="clickable">
+              </a-video>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        let arScene;
+        let isARStarted = false;
+        let loadingScreen = document.getElementById('loadingScreen');
+        let cameraInstructions = document.getElementById('cameraInstructions');
+        let statusIndicator = document.getElementById('statusIndicator');
+        let scanningOverlay = document.getElementById('scanningOverlay');
+        let progressFill = document.getElementById('progressFill');
+        
+        // Detección y configuración de dispositivo
+        function setupDeviceInfo() {
+            const deviceInfo = document.getElementById('deviceInfo');
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const isXiaomi = /Mi|Redmi|MIUI/i.test(navigator.userAgent);
+            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+            
+            if (isXiaomi) {
+                deviceInfo.textContent = '🔧 Xiaomi detectado - Si no funciona la cámara, ve a Configuración > Apps > Navegador > Permisos';
+                deviceInfo.style.color = '#ffd700';
+            } else if (isAndroid) {
+                deviceInfo.textContent = '📱 Android detectado - Optimizaciones aplicadas';
+                deviceInfo.style.color = '#90EE90';
+            } else if (isIOS) {
+                deviceInfo.textContent = '🍏 iOS detectado - Configuración optimizada';
+                deviceInfo.style.color = '#87CEEB';
+            } else {
+                deviceInfo.textContent = '🌐 Navegador detectado - Modo universal';
+                deviceInfo.style.color = '#DDA0DD';
+            }
+        }
+        
+        // Ejecutar al cargar
+        document.addEventListener('DOMContentLoaded', setupDeviceInfo);
+        
+        // Función para iniciar experiencia AR
+        async function startARExperience() {
+            if (isARStarted) return;
+            
+            try {
+                // Solicitar permisos de cámara explícitamente
+                updateProgress(20);
+                await requestCameraPermission();
+                
+                updateProgress(50);
+                
+                // Esperar a que se cargue la escena
+                arScene = document.querySelector('a-scene');
+                await waitForSceneLoad();
+                
+                updateProgress(80);
+                
+                // Configurar eventos de tracking
+                setupTrackingEvents();
+                
+                updateProgress(100);
+                
+                // Ocultar pantalla de carga y mostrar cámara
+                setTimeout(() => {
+                    loadingScreen.classList.add('hidden');
+                    showCameraInstructions();
+                    showStatusIndicator('Buscando marcador...');
+                    activateScanning();
+                    isARStarted = true;
+                }, 500);
+                
+            } catch (error) {
+                console.error('Error iniciando AR:', error);
+                showStatusIndicator('Error: Permite el acceso a la cámara');
+                // Reintentar en 3 segundos
+                setTimeout(() => {
+                    isARStarted = false;
+                    updateProgress(0);
+                }, 3000);
+            }
+        }
+        
+        // Detección de dispositivo
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const isXiaomi = /Mi|Redmi|MIUI/i.test(navigator.userAgent);
+        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        async function requestCameraPermission() {
+            try {
+                // Para Xiaomi A3 y otros Android, usar estrategia específica
+                let constraints;
+                
+                if (isAndroid) {
+                    // Android requiere permisos más específicos
+                    constraints = {
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { min: 640, ideal: 1280 },
+                            height: { min: 480, ideal: 720 },
+                            frameRate: { ideal: 30 }
+                        }
+                    };
+                    
+                    // Xiaomi A3 necesita delay extra
+                    if (isXiaomi) {
+                        console.log('🔧 Dispositivo Xiaomi detectado - aplicando optimizaciones');
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } else {
+                    // iOS y otros
+                    constraints = { 
+                        video: { 
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        } 
+                    };
+                }
+                
+                console.log('📹 Solicitando permisos de cámara...', constraints);
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Verificar que el stream está activo
+                if (!stream || !stream.active) {
+                    throw new Error('Stream de cámara inactivo');
+                }
+                
+                console.log('✅ Permisos de cámara concedidos');
+                
+                // Liberar el stream después de verificar
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('🔒 Track de cámara liberado:', track.kind);
+                });
+                
+                return true;
+            } catch (error) {
+                console.error('❌ Error de cámara:', error);
+                
+                // Mensaje específico para Xiaomi
+                if (isXiaomi && error.name === 'NotAllowedError') {
+                    throw new Error('Xiaomi A3: Ve a Configuración > Aplicaciones > Navegador > Permisos y activa la Cámara');
+                } else if (error.name === 'NotAllowedError') {
+                    throw new Error('Acceso a cámara denegado - permite los permisos');
+                } else if (error.name === 'NotFoundError') {
+                    throw new Error('No se encontró cámara trasera');
+                } else {
+                    throw new Error('Error de cámara: ' + error.message);
+                }
+            }
+        }
+        
+        function waitForSceneLoad() {
+            return new Promise((resolve) => {
+                if (arScene.hasLoaded) {
+                    resolve();
+                } else {
+                    arScene.addEventListener('loaded', resolve, { once: true });
+                }
+            });
+        }
+        
+        function setupTrackingEvents() {
+            const arContent = document.querySelector('#ar-content');
+            
+            arContent.addEventListener('targetFound', () => {
+                console.log('🎯 Target encontrado!');
+                hideInstructions();
+                showStatusIndicator('¡Marcador detectado!');
+                deactivateScanning();
+                
+                // Ocultar status después de 2 segundos
+                setTimeout(() => {
+                    hideStatusIndicator();
+                }, 2000);
+            });
+
+            arContent.addEventListener('targetLost', () => {
+                console.log('❌ Target perdido');
+                showStatusIndicator('Buscando marcador...');
+                activateScanning();
+            });
+        }
+        
+        function updateProgress(percent) {
+            progressFill.style.width = percent + '%';
+        }
+        
+        function showCameraInstructions() {
+            cameraInstructions.classList.add('show');
+            
+            // Auto-ocultar después de 5 segundos
+            setTimeout(() => {
+                if (cameraInstructions.classList.contains('show')) {
+                    hideInstructions();
+                }
+            }, 5000);
+        }
+        
+        function hideInstructions() {
+            cameraInstructions.classList.remove('show');
+        }
+        
+        function showStatusIndicator(text) {
+            statusIndicator.textContent = text;
+            statusIndicator.classList.add('show');
+        }
+        
+        function hideStatusIndicator() {
+            statusIndicator.classList.remove('show');
+        }
+        
+        function activateScanning() {
+            scanningOverlay.classList.add('active');
+        }
+        
+        function deactivateScanning() {
+            scanningOverlay.classList.remove('active');
+        }
+        
+        // Prevenir zoom y mejorar UX móvil
+        document.addEventListener('gesturestart', e => e.preventDefault());
+        document.addEventListener('gesturechange', e => e.preventDefault());
+        document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+        
+        // Prevenir scroll accidental
+        document.body.addEventListener('touchstart', e => {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.body.addEventListener('touchend', e => {
+            if (e.touches.length > 0) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // Solicitud automática de permisos al cargar la página
+        window.addEventListener('load', async () => {
+            console.log('🔄 Página cargada - verificando permisos de cámara...');
+            
+            try {
+                // Primero verificar si ya hay permisos
+                const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+                console.log('📋 Estado de permisos actual:', permissionStatus.state);
+                
+                if (permissionStatus.state === 'granted') {
+                    // Ya tiene permisos - destacar botón
+                    const startBtn = document.querySelector('.start-button');
+                    startBtn.style.background = 'rgba(0, 255, 136, 0.8)';
+                    startBtn.style.borderColor = 'rgba(0, 255, 136, 1)';
+                    startBtn.textContent = '📱 ¡Listo! Comenzar AR';
+                    console.log('✅ Permisos ya concedidos');
+                } else if (permissionStatus.state === 'prompt') {
+                    // Necesita solicitar permisos - hacerlo automáticamente
+                    console.log('🔄 Solicitando permisos automáticamente...');
+                    
+                    // Delay corto para que la página se cargue completamente
+                    setTimeout(async () => {
+                        try {
+                            await requestCameraPermissionQuiet();
+                            
+                            // Si tuvo éxito, destacar botón
+                            const startBtn = document.querySelector('.start-button');
+                            startBtn.style.background = 'rgba(0, 255, 136, 0.8)';
+                            startBtn.style.borderColor = 'rgba(0, 255, 136, 1)';
+                            startBtn.textContent = '📱 ¡Permisos OK! Comenzar';
+                            console.log('✅ Permisos concedidos automáticamente');
+                            
+                        } catch (error) {
+                            console.log('⚠️ No se pudieron obtener permisos automáticamente:', error.message);
+                            // No hacer nada - el usuario tendrá que usar el botón manualmente
+                        }
+                    }, 1000);
+                } else {
+                    console.log('❌ Permisos denegados previamente');
+                }
+            } catch (error) {
+                console.log('⚠️ API de permisos no soportada, intentando solicitud directa...');
+                
+                // Delay para dar tiempo a que se cargue la página
+                setTimeout(async () => {
+                    try {
+                        await requestCameraPermissionQuiet();
+                        
+                        const startBtn = document.querySelector('.start-button');
+                        startBtn.style.background = 'rgba(0, 255, 136, 0.8)';
+                        startBtn.style.borderColor = 'rgba(0, 255, 136, 1)';
+                        startBtn.textContent = '📱 ¡Cámara Lista! Comenzar';
+                        console.log('✅ Permisos concedidos automáticamente (fallback)');
+                        
+                    } catch (error) {
+                        console.log('⚠️ Solicitud automática falló:', error.message);
+                        // Usuario tendrá que usar botón manual
+                    }
+                }, 1500);
+            }
+        });
+        
+        // Función silenciosa para solicitar permisos sin mostrar errores al usuario
+        async function requestCameraPermissionQuiet() {
+            let constraints;
+            
+            if (isAndroid) {
+                constraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { min: 640, ideal: 1280 },
+                        height: { min: 480, ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    }
+                };
+                
+                if (isXiaomi) {
+                    console.log('🔧 Xiaomi detectado - aplicando delay...');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            } else {
+                constraints = { 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                };
+            }
+            
+            console.log('📹 Solicitando permisos automáticamente...', constraints);
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            if (!stream || !stream.active) {
+                throw new Error('Stream inactivo');
+            }
+            
+            // Liberar inmediatamente
+            stream.getTracks().forEach(track => {
+                track.stop();
+                console.log('🔒 Track liberado automáticamente:', track.kind);
+            });
+            
+            return true;
+        }
+    </script>
+</body>
+</html>
